@@ -112,6 +112,11 @@ public abstract class Workload {
     stopRequested.set(true);
   }
 
+  public abstract boolean isMultiWorkload();
+  public abstract boolean multiWorkloadFinished(int curWorkloadId);
+  public abstract Long getCurrentWorkloadDuration(int curWorkloadId);
+  public abstract void switchToNextWorkload(int nextWorkloadId);
+
   /**
    * Check the status of the stop request flag.
    * @return true if stop was requested, false otherwise.

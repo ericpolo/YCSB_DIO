@@ -117,15 +117,33 @@ public class ClientThread implements Runnable {
       if (dotransactions) {
         long startTimeNanos = System.nanoTime();
 
-        while (((opcount == 0) || (opsdone < opcount)) && !workload.isStopRequested()) {
+        if (workload.isMultiWorkload()) {
+          int curWorkloadId = 0;
+          while (((opcount == 0) || (opsdone < opcount)) && !workload.isStopRequested() &&
+              !workload.multiWorkloadFinished(curWorkloadId)) {
+            long workloadStartTime = System.nanoTime();
+            while (System.nanoTime() <= workloadStartTime + workload.getCurrentWorkloadDuration(curWorkloadId)) {
+              if (!workload.doTransaction(db, workloadstate)) {
+                break;
+              }
+              opsdone++;
 
-          if (!workload.doTransaction(db, workloadstate)) {
-            break;
+              throttleNanos(startTimeNanos);
+            }
+            curWorkloadId += 1;
+            workload.switchToNextWorkload(curWorkloadId);
           }
+        } else {
+          while (((opcount == 0) || (opsdone < opcount)) && !workload.isStopRequested()) {
+  
+            if (!workload.doTransaction(db, workloadstate)) {
+              break;
+            }
 
-          opsdone++;
+            opsdone++;
 
-          throttleNanos(startTimeNanos);
+            throttleNanos(startTimeNanos);
+          }
         }
       } else {
         long startTimeNanos = System.nanoTime();

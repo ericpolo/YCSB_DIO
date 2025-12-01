@@ -1286,4 +1286,22 @@ public class TimeSeriesWorkload extends Workload {
     }
   }
 
+  @Override
+  public boolean isMultiWorkload() {
+    return false;
+  }
+  @Override
+  public boolean multiWorkloadFinished(int curWorkloadId) {
+    return true;
+  }
+
+  @Override
+  public Long getCurrentWorkloadDuration(int curWorkloadId) {
+    return 0L;
+  }
+
+  @Override
+  public void switchToNextWorkload(int nextWorkloadId) {
+    return;
+  }
 }

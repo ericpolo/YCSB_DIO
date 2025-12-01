@@ -19,7 +19,6 @@ package site.ycsb.workloads;
 
 import site.ycsb.*;
 import site.ycsb.generator.*;
-import site.ycsb.generator.UniformLongGenerator;
 import site.ycsb.measurements.Measurements;
 
 import java.io.IOException;
@@ -270,7 +269,7 @@ public class CoreWorkload extends Workload {
   /**
    * The default zero padding value. Matches integer sort order
    */
-  public static final String ZERO_PADDING_PROPERTY_DEFAULT = "1";
+  public static final String ZERO_PADDING_PROPERTY_DEFAULT = "8";
 
 
   /**
@@ -356,8 +355,30 @@ public class CoreWorkload extends Workload {
    */
   public static final String FIELD_NAME_PREFIX_DEFAULT = "field";
 
+  /**
+   * How many workload is defined in this property file.
+   */
+  public static final String WORKLOAD_COUNT = "workloadcount";
+
+  /**
+   * Default value of the workload count.
+   */
+  public static final String WORKLOAD_COUNT_DEFAULT = "1";
+
+  /**
+   * How long each workload should run.
+   */
+  public static final String WORKLOAD_DURATION = "workloadduration";
+
+  /**
+   * Default value of the workload duration.
+   */
+  public static final String WORKLOAD_DURATION_DEFAULT = "20";
+
   protected NumberGenerator keysequence;
   protected DiscreteGenerator operationchooser;
+  protected ArrayList<DiscreteGenerator> operationChooserList;
+  protected ArrayList<Long> workloadDurationList;
   protected NumberGenerator keychooser;
   protected NumberGenerator fieldchooser;
   protected AcknowledgedCounterGenerator transactioninsertkeysequence;
@@ -377,11 +398,11 @@ public class CoreWorkload extends Workload {
     }
     String value = Long.toString(keynum);
     int fill = zeropadding - value.length();
-    String prekey = "user";
+    String key = "";
     for (int i = 0; i < fill; i++) {
-      prekey += '0';
+      key += '0';
     }
-    return prekey + value;
+    return value + key;
   }
 
   protected static NumberGenerator getFieldLengthGenerator(Properties p) throws WorkloadException {
@@ -485,8 +506,27 @@ public class CoreWorkload extends Workload {
       orderedinserts = true;
     }
 
+    int workloadCount =
+        Integer.parseInt(p.getProperty(WORKLOAD_COUNT, WORKLOAD_COUNT_DEFAULT));
     keysequence = new CounterGenerator(insertstart);
-    operationchooser = createOperationGenerator(p);
+    if (workloadCount <= 1) {
+      operationchooser = createOperationGenerator(p);
+    } else {
+      operationChooserList = new ArrayList<DiscreteGenerator>();
+      workloadDurationList = new ArrayList<Long>();
+      for (int i = 1; i <= workloadCount; i++) {
+        System.out.printf("Loading workload %d...%n", i);
+        Long duration = Long.parseLong(p.getProperty(WORKLOAD_DURATION + "_" + i,
+            WORKLOAD_DURATION_DEFAULT));
+        Long secondToNanos = 1000000000L;
+        operationChooserList.add(createOperationGeneratorWithWorkloadId(p, i));
+        workloadDurationList.add(duration * secondToNanos);
+        System.out.printf("Workload %d duration is %d seconds%n", i, workloadDurationList.get(i-1));          
+        System.out.printf("Loading workload %d... finished%n", i);
+      }
+      // set the first operationChooser as the one to use
+      operationchooser = operationChooserList.get(0);
+    }
 
     transactioninsertkeysequence = new AcknowledgedCounterGenerator(recordcount);
     if (requestdistrib.compareTo("uniform") == 0) {
@@ -893,6 +933,74 @@ public class CoreWorkload extends Workload {
     if (readmodifywriteproportion > 0) {
       operationchooser.addValue(readmodifywriteproportion, "READMODIFYWRITE");
     }
+    System.out.printf("Current Workload: Read %.2f, Update %.2f, Insert %.2f, Scan %.2f, ReadModifyWrite %.2f %n",
+        readproportion, updateproportion, insertproportion, scanproportion, readmodifywriteproportion);
+
     return operationchooser;
+  }
+  protected static DiscreteGenerator createOperationGeneratorWithWorkloadId(final Properties p, final int worklodId) {
+    if (p == null) {
+      throw new IllegalArgumentException("Properties object cannot be null");
+    }
+    String workloadIdSuffix = "_" + worklodId;
+    final double readproportion = Double.parseDouble(
+        p.getProperty(READ_PROPORTION_PROPERTY + workloadIdSuffix, READ_PROPORTION_PROPERTY_DEFAULT));
+    final double updateproportion = Double.parseDouble(
+        p.getProperty(UPDATE_PROPORTION_PROPERTY + workloadIdSuffix, UPDATE_PROPORTION_PROPERTY_DEFAULT));
+    final double insertproportion = Double.parseDouble(
+        p.getProperty(INSERT_PROPORTION_PROPERTY + workloadIdSuffix, INSERT_PROPORTION_PROPERTY_DEFAULT));
+    final double scanproportion = Double.parseDouble(
+        p.getProperty(SCAN_PROPORTION_PROPERTY + workloadIdSuffix, SCAN_PROPORTION_PROPERTY_DEFAULT));
+    final double readmodifywriteproportion = Double.parseDouble(p.getProperty(
+        READMODIFYWRITE_PROPORTION_PROPERTY + workloadIdSuffix, READMODIFYWRITE_PROPORTION_PROPERTY_DEFAULT));
+
+    final DiscreteGenerator operationchooser = new DiscreteGenerator();
+    if (readproportion > 0) {
+      operationchooser.addValue(readproportion, "READ");
+    }
+
+    if (updateproportion > 0) {
+      operationchooser.addValue(updateproportion, "UPDATE");
+    }
+
+    if (insertproportion > 0) {
+      operationchooser.addValue(insertproportion, "INSERT");
+    }
+
+    if (scanproportion > 0) {
+      operationchooser.addValue(scanproportion, "SCAN");
+    }
+
+    if (readmodifywriteproportion > 0) {
+      operationchooser.addValue(readmodifywriteproportion, "READMODIFYWRITE");
+    }
+    System.out.printf("Workload %d: Read %.2f, Update %.2f, Insert %.2f, Scan %.2f, ReadModifyWrite %.2f %n",
+        worklodId, readproportion, updateproportion, insertproportion, scanproportion, readmodifywriteproportion);
+
+    return operationchooser;
+  }
+
+  @Override
+  public boolean isMultiWorkload() {
+    return (operationChooserList != null);
+  }
+
+  @Override
+  public boolean multiWorkloadFinished(int curWorkloadId) {
+    return (operationChooserList == null || operationChooserList.size() <= curWorkloadId);
+  }
+
+  @Override
+  public Long getCurrentWorkloadDuration(int curWorkloadId) {
+    return workloadDurationList.get(curWorkloadId);
+  }
+
+  @Override
+  public void switchToNextWorkload(int nextWorkloadId) {
+    if (!multiWorkloadFinished(nextWorkloadId)) {
+      operationchooser = operationChooserList.get(nextWorkloadId);
+    }
+    System.out.println("Switching to the next workload...");
+    return;
   }
 }
