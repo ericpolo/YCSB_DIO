@@ -342,7 +342,7 @@ public final class Client {
         t.start();
       }
 
-      if (maxExecutionTime > 0) {
+      if (maxExecutionTime > 0 || workload.isMultiWorkload()) {
         terminator = new TerminatorThread(maxExecutionTime, threads.keySet(), workload);
         terminator.start();
       }

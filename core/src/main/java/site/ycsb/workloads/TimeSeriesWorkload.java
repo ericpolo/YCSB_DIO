@@ -1304,4 +1304,14 @@ public class TimeSeriesWorkload extends Workload {
   public void switchToNextWorkload(int nextWorkloadId) {
     return;
   }
+
+  @Override
+  public boolean needSwitchWorkload(int curWorkloadId) {
+    return false;
+  }
+
+  @Override
+  public void setSwitchWorkload(int curWorkloadId) {
+    return;
+  }
 }

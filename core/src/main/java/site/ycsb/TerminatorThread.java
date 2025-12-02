@@ -31,6 +31,7 @@ public class TerminatorThread extends Thread {
   private long maxExecutionTime;
   private Workload workload;
   private long waitTimeOutInMS;
+  private boolean workloadSwitchMode;
 
   public TerminatorThread(long maxExecutionTime, Collection<? extends Thread> threads,
                           Workload workload) {
@@ -38,10 +39,52 @@ public class TerminatorThread extends Thread {
     this.threads = threads;
     this.workload = workload;
     waitTimeOutInMS = 2000;
-    System.err.println("Maximum execution time specified as: " + maxExecutionTime + " secs");
+    if (maxExecutionTime != 0) {
+      System.err.println("Maximum execution time specified as: " + maxExecutionTime + " secs");
+    }
+
+    workloadSwitchMode = workload.isMultiWorkload();
   }
 
   public void run() {
+    if (workloadSwitchMode) {
+      multiWorkloadRun();
+    } else {
+      normalRun();
+    }
+  }
+
+  public void multiWorkloadRun() {
+    int workloadId = 0;
+    int milliToNano = 1000000;
+    while (!workload.multiWorkloadFinished(workloadId)) {
+      try {
+        Thread.sleep(workload.getCurrentWorkloadDuration(workloadId) / milliToNano);
+      } catch (InterruptedException e) {
+        System.err.println("Could not wait until the duration of the current workload, TerminatorThread interrupted.");
+        return;
+      }
+      System.err.printf("Duration of the workload %d elapsed. Requesting switching the workload.", workloadId);
+      workloadId += 1;
+      workload.switchToNextWorkload(workloadId);
+    }
+    workload.requestStop();
+    for (Thread t : threads) {
+      while (t.isAlive()) {
+        try {
+          t.join(waitTimeOutInMS);
+          if (t.isAlive()) {
+            System.out.println("Still waiting for thread " + t.getName() + " to complete. " +
+                "Workload status: " + workload.isStopRequested());
+          }
+        } catch (InterruptedException e) {
+          // Do nothing. Don't know why I was interrupted.
+        }
+      }
+    }
+  }
+
+  public void normalRun() {
     try {
       Thread.sleep(maxExecutionTime * 1000);
     } catch (InterruptedException e) {

@@ -23,6 +23,7 @@ import site.ycsb.measurements.Measurements;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The core benchmark scenario. Represents a set of clients doing simple CRUD operations. The
@@ -378,6 +379,7 @@ public class CoreWorkload extends Workload {
   protected NumberGenerator keysequence;
   protected DiscreteGenerator operationchooser;
   protected ArrayList<DiscreteGenerator> operationChooserList;
+  protected volatile ArrayList<AtomicBoolean> workloadSwitchRequested;
   protected ArrayList<Long> workloadDurationList;
   protected NumberGenerator keychooser;
   protected NumberGenerator fieldchooser;
@@ -514,6 +516,7 @@ public class CoreWorkload extends Workload {
     } else {
       operationChooserList = new ArrayList<DiscreteGenerator>();
       workloadDurationList = new ArrayList<Long>();
+      workloadSwitchRequested = new ArrayList<AtomicBoolean>();
       for (int i = 1; i <= workloadCount; i++) {
         System.out.printf("Loading workload %d...%n", i);
         Long duration = Long.parseLong(p.getProperty(WORKLOAD_DURATION + "_" + i,
@@ -521,6 +524,7 @@ public class CoreWorkload extends Workload {
         Long secondToNanos = 1000000000L;
         operationChooserList.add(createOperationGeneratorWithWorkloadId(p, i));
         workloadDurationList.add(duration * secondToNanos);
+        workloadSwitchRequested.add(new AtomicBoolean(false));
         System.out.printf("Workload %d duration is %d seconds%n", i, workloadDurationList.get(i-1));          
         System.out.printf("Loading workload %d... finished%n", i);
       }
@@ -1000,7 +1004,27 @@ public class CoreWorkload extends Workload {
     if (!multiWorkloadFinished(nextWorkloadId)) {
       operationchooser = operationChooserList.get(nextWorkloadId);
     }
+    /* tell everyone to switch workload */
+    setSwitchWorkload(nextWorkloadId - 1);
     System.out.println("Switching to the next workload...");
     return;
+  }
+
+  @Override
+  public boolean needSwitchWorkload(int curWorkloadId) {
+    if (workloadSwitchRequested.size() < curWorkloadId) {
+      return false;
+    }
+
+    return workloadSwitchRequested.get(curWorkloadId).get();
+  }
+
+  @Override
+  public void setSwitchWorkload(int curWorkloadId) {
+    if (workloadSwitchRequested.size() < curWorkloadId) {
+      return;
+    }
+
+    workloadSwitchRequested.get(curWorkloadId).set(true);
   }
 }

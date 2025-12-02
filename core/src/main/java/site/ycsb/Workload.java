@@ -112,10 +112,16 @@ public abstract class Workload {
     stopRequested.set(true);
   }
 
+  /**
+   * Abstract functions to support multi-workload YCSB.
+   * @return
+   */
   public abstract boolean isMultiWorkload();
   public abstract boolean multiWorkloadFinished(int curWorkloadId);
   public abstract Long getCurrentWorkloadDuration(int curWorkloadId);
   public abstract void switchToNextWorkload(int nextWorkloadId);
+  public abstract boolean needSwitchWorkload(int curWorkloadId);
+  public abstract void setSwitchWorkload(int curWorkloadId);
 
   /**
    * Check the status of the stop request flag.
