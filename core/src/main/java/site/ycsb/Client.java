@@ -342,7 +342,8 @@ public final class Client {
         t.start();
       }
 
-      if (maxExecutionTime > 0 || workload.isMultiWorkload()) {
+      boolean dotransactions = Boolean.valueOf(props.getProperty(DO_TRANSACTIONS_PROPERTY, String.valueOf(true)));
+      if (maxExecutionTime > 0 || (dotransactions && workload.isMultiWorkload())) {
         terminator = new TerminatorThread(maxExecutionTime, threads.keySet(), workload);
         terminator.start();
       }

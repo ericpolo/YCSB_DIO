@@ -119,13 +119,14 @@ public class ClientThread implements Runnable {
 
         if (workload.isMultiWorkload()) {
           int curWorkloadId = 0;
-          while (((opcount == 0) || (opsdone < opcount)) && !workload.isStopRequested() &&
+          while (!workload.isStopRequested() &&
               !workload.multiWorkloadFinished(curWorkloadId)) {
             while (!workload.needSwitchWorkload(curWorkloadId)) {
               if (!workload.doTransaction(db, workloadstate)) {
                 break;
               }
               opsdone++;
+              workload.increaseOpCount();
 
               throttleNanos(startTimeNanos);
             }

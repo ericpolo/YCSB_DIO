@@ -74,7 +74,7 @@ public class CoreWorkload extends Workload {
   /**
    * The default name of the database table to run queries against.
    */
-  public static final String TABLENAME_PROPERTY_DEFAULT = "usertable";
+  public static final String TABLENAME_PROPERTY_DEFAULT = "default";
 
   protected String table;
 
@@ -367,7 +367,7 @@ public class CoreWorkload extends Workload {
   public static final String WORKLOAD_COUNT_DEFAULT = "1";
 
   /**
-   * How long each workload should run.
+   * How long corresponding workload should run.
    */
   public static final String WORKLOAD_DURATION = "workloadduration";
 
@@ -376,11 +376,34 @@ public class CoreWorkload extends Workload {
    */
   public static final String WORKLOAD_DURATION_DEFAULT = "20";
 
+  /**
+   * How many operations corresponding workload should execute.
+   */
+  public static final String WORKLOAD_OPCOUNT = "workloadopcount";
+
+  /**
+   * Default value of the workload operation count.
+   */
+  public static final String WORKLOAD_OPCOUNT_DEFAULT = "100000000";
+
+  /**
+   * Stop condition of corresponding workload.
+   * valid values: "duration", "opcount"
+   */
+  public static final String STOP_CONDITION = "stopcondition";
+
+  /**
+   * Default value of the workload duration.
+   */
+  public static final String STOP_CONDITION_DEFAULT = "duration";
+
+
   protected NumberGenerator keysequence;
   protected DiscreteGenerator operationchooser;
   protected ArrayList<DiscreteGenerator> operationChooserList;
   protected volatile ArrayList<AtomicBoolean> workloadSwitchRequested;
-  protected ArrayList<Long> workloadDurationList;
+  protected ArrayList<String> workloadStopConditionTypeList;
+  protected ArrayList<Long> workloadStopConditionList;
   protected NumberGenerator keychooser;
   protected NumberGenerator fieldchooser;
   protected AcknowledgedCounterGenerator transactioninsertkeysequence;
@@ -435,6 +458,46 @@ public class CoreWorkload extends Workload {
           "Unknown field length distribution \"" + fieldlengthdistribution + "\"");
     }
     return fieldlengthgenerator;
+  }
+
+  @Override
+  public void initMultiWorkload(Properties p, Integer workloadCount) throws WorkloadException {
+    operationChooserList = new ArrayList<DiscreteGenerator>();
+    workloadStopConditionTypeList = new ArrayList<String>();
+    workloadStopConditionList = new ArrayList<Long>();
+    workloadSwitchRequested = new ArrayList<AtomicBoolean>();
+    for (int i = 1; i <= workloadCount; i++) {
+      Long condition;
+      Long secondToNanos = 1000000000L;
+
+      System.out.printf("Loading workload %d...%n", i);
+      String stopCondition = p.getProperty(STOP_CONDITION + "_" + i,
+          STOP_CONDITION_DEFAULT);
+      if (stopCondition.equals("opcount")) {
+        condition = Long.parseLong(p.getProperty(WORKLOAD_OPCOUNT + "_" + i,
+            WORKLOAD_OPCOUNT_DEFAULT));
+      } else {
+        // default case is duration
+        condition = Long.parseLong(p.getProperty(WORKLOAD_DURATION + "_" + i,
+            WORKLOAD_DURATION_DEFAULT)) * secondToNanos;
+      }
+      operationChooserList.add(createOperationGeneratorWithWorkloadId(p, i));
+      workloadStopConditionTypeList.add(stopCondition);
+      workloadStopConditionList.add(condition);
+      workloadSwitchRequested.add(new AtomicBoolean(false));
+      System.err.printf("Current workload stop condition is: %s%n", stopCondition);
+      if (stopCondition.equals("opcount")) {
+        System.out.printf("Workload %d operation count is %d ops%n", i,
+            workloadStopConditionList.get(i-1));          
+      } else {
+        System.out.printf("Workload %d duration is %d seconds%n", i,
+            workloadStopConditionList.get(i-1) / secondToNanos);
+      }
+      System.out.printf("Loading workload %d... finished%n", i);
+    }
+    // set the first operationChooser as the one to use
+    operationchooser = operationChooserList.get(0);
+    operationchooser.print();
   }
 
   /**
@@ -514,22 +577,7 @@ public class CoreWorkload extends Workload {
     if (workloadCount <= 1) {
       operationchooser = createOperationGenerator(p);
     } else {
-      operationChooserList = new ArrayList<DiscreteGenerator>();
-      workloadDurationList = new ArrayList<Long>();
-      workloadSwitchRequested = new ArrayList<AtomicBoolean>();
-      for (int i = 1; i <= workloadCount; i++) {
-        System.out.printf("Loading workload %d...%n", i);
-        Long duration = Long.parseLong(p.getProperty(WORKLOAD_DURATION + "_" + i,
-            WORKLOAD_DURATION_DEFAULT));
-        Long secondToNanos = 1000000000L;
-        operationChooserList.add(createOperationGeneratorWithWorkloadId(p, i));
-        workloadDurationList.add(duration * secondToNanos);
-        workloadSwitchRequested.add(new AtomicBoolean(false));
-        System.out.printf("Workload %d duration is %d seconds%n", i, workloadDurationList.get(i-1));          
-        System.out.printf("Loading workload %d... finished%n", i);
-      }
-      // set the first operationChooser as the one to use
-      operationchooser = operationChooserList.get(0);
+      initMultiWorkload(p, workloadCount);
     }
 
     transactioninsertkeysequence = new AcknowledgedCounterGenerator(recordcount);
@@ -995,14 +1043,20 @@ public class CoreWorkload extends Workload {
   }
 
   @Override
-  public Long getCurrentWorkloadDuration(int curWorkloadId) {
-    return workloadDurationList.get(curWorkloadId);
+  public Long getCurrentWorkloadStopCondition(int curWorkloadId) {
+    return workloadStopConditionList.get(curWorkloadId);
+  }
+
+  @Override
+  public String getCurrentWorkloadStopConditionType(int curWorkloadId) {
+    return workloadStopConditionTypeList.get(curWorkloadId);
   }
 
   @Override
   public void switchToNextWorkload(int nextWorkloadId) {
     if (!multiWorkloadFinished(nextWorkloadId)) {
       operationchooser = operationChooserList.get(nextWorkloadId);
+      operationchooser.print();
     }
     /* tell everyone to switch workload */
     setSwitchWorkload(nextWorkloadId - 1);

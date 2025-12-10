@@ -1296,8 +1296,13 @@ public class TimeSeriesWorkload extends Workload {
   }
 
   @Override
-  public Long getCurrentWorkloadDuration(int curWorkloadId) {
+  public Long getCurrentWorkloadStopCondition(int curWorkloadId) {
     return 0L;
+  }
+
+  @Override
+  public String getCurrentWorkloadStopConditionType(int curWorkloadId) {
+    return "";
   }
 
   @Override

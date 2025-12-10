@@ -59,12 +59,22 @@ public class TerminatorThread extends Thread {
     int milliToNano = 1000000;
     while (!workload.multiWorkloadFinished(workloadId)) {
       try {
-        Thread.sleep(workload.getCurrentWorkloadDuration(workloadId) / milliToNano);
+        if (workload.getCurrentWorkloadStopConditionType(workloadId).equals("duration")) {
+          Thread.sleep(workload.getCurrentWorkloadStopCondition(workloadId) / milliToNano);
+        } else {
+          workload.clearOpCount();
+          Long targetOpsCount = workload.getCurrentWorkloadStopCondition(workloadId);
+          while (workload.getCurrentOpCount() <= targetOpsCount) {
+            // System.err.printf("Terminator: CurrentWorkload operations count %d%n", workload.getCurrentOpCount());
+            // sleep for 2 sec
+            Thread.sleep(2000);
+          }
+        }
       } catch (InterruptedException e) {
         System.err.println("Could not wait until the duration of the current workload, TerminatorThread interrupted.");
         return;
       }
-      System.err.printf("Duration of the workload %d elapsed. Requesting switching the workload.", workloadId);
+      System.err.printf("Workload %d finished. Requesting switching the workload.%n", workloadId);
       workloadId += 1;
       workload.switchToNextWorkload(workloadId);
     }

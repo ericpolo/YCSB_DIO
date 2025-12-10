@@ -42,6 +42,7 @@ public abstract class Workload {
   public static final String INSERT_START_PROPERTY_DEFAULT = "0";
   
   private volatile AtomicBoolean stopRequested = new AtomicBoolean(false);
+  private volatile Long opCount = 0L;
   
   /** Operations available for a database. */
   public enum Operation {
@@ -59,6 +60,8 @@ public abstract class Workload {
   public void init(Properties p) throws WorkloadException {
   }
 
+  public void initMultiWorkload(Properties p, Integer workloadCount) throws WorkloadException {
+  }
   /**
    * Initialize any state for a particular client thread. Since the scenario object
    * will be shared among all threads, this is the place to create any state that is specific
@@ -118,7 +121,8 @@ public abstract class Workload {
    */
   public abstract boolean isMultiWorkload();
   public abstract boolean multiWorkloadFinished(int curWorkloadId);
-  public abstract Long getCurrentWorkloadDuration(int curWorkloadId);
+  public abstract Long getCurrentWorkloadStopCondition(int curWorkloadId);
+  public abstract String getCurrentWorkloadStopConditionType(int curWorkloadId);
   public abstract void switchToNextWorkload(int nextWorkloadId);
   public abstract boolean needSwitchWorkload(int curWorkloadId);
   public abstract void setSwitchWorkload(int curWorkloadId);
@@ -129,5 +133,17 @@ public abstract class Workload {
    */
   public boolean isStopRequested() {
     return stopRequested.get();
+  }
+
+  public Long getCurrentOpCount() {
+    return opCount;
+  }
+
+  public void clearOpCount() {
+    opCount = 0L;
+  }
+
+  public void increaseOpCount() {
+    opCount++;
   }
 }
